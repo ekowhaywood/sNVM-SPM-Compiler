@@ -1,0 +1,6 @@
+1 2 read
+2 2 perror
+3 2 exit
+5 2 write
+6 2 read
+7 2 fprintf

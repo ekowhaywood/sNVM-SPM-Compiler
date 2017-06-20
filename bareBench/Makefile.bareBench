@@ -1,0 +1,107 @@
+
+HOME = /mnt/hgfs/sNVM
+
+LLVM_PATH =
+CC = $(LLVM_PATH)clang
+CXX = $(LLVM_PATH)clang++
+LINK = $(LLVM_PATH)llvm-link
+DIS = $(LLVM_PATH)llvm-dis
+OPT = $(LLVM_PATH)opt -disable-inlining
+LLC = $(LLVM_PATH)llc -filetype=obj
+
+
+gnueabihf = -target arm-linux-gnueabihf -march=armv7-a -mfloat-abi=hard -mfpu=vfpv3-d16 -mthumb -I$(HOME)/gcc-4.6/usr/lib/gcc/arm-linux-gnueabihf/4.6/include -I$(HOME)/gcc-4.6/usr/lib/gcc/arm-linux-gnueabihf/4.6/include-fixed -I$(HOME)/gcc-4.6/usr/arm-linux-gnueabihf/include -I$(HOME)/gcc-4.6/usr/arm-linux-gnueabihf/include/linux -I$(HOME)/gcc-4.6/usr/arm-linux-gnueabihf/include
+
+gnueabi = -target arm-linux-gnueabi -march=armv5t -mfloat-abi=soft -I/usr/lib/gcc-cross/arm-linux-gnueabi/5/include -I/usr/lib/gcc-cross/arm-linux-gnueabi/5/include-fixed -I/usr/lib/gcc-cross/arm-linux-gnueabi/5/../../../../arm-linux-gnueabi/include
+
+crossFlags = $(gnueabi)
+crossBinutils =arm-linux-gnueabi-
+FASTSIM =
+#qemu-arm
+CompileOptions = $(ExtraCompileOptions)
+
+Objs:= $(foreach OBJ,$(Program.Obj), $(OBJ).o)
+LibObjs:= lib._common.o $(foreach OBJ, $(stdlibs), lib.$(OBJ).o)
+LibCommonHeader = -include ../substdlibs/_common.h
+LibHeaders= $(LibCommonHeader) $(foreach hdr,$(stdlibs), -include ../substdlibs/$(hdr).h )
+#LibHeaders:= $(LibCommonHeader) $(LibHeaders)
+
+#default.ld = ../default.ld $(substdlib.h) $(substdlib.Obj) substdlib.Obj = ../substdlib.o substdlib.h  = -include ../substdlib.h
+
+%.o: %.c ;
+	@echo " ==> $@ $(LibHeaders) "
+	$(crossBinutils)gcc -c $(CompileOptions) $(LibHeaders) $< -o $@
+
+lib.%.o : ../substdlibs/%.c ../substdlibs/%.h ;
+	@echo " ==> $@ "
+	$(crossBinutils)gcc -c $(CompileOptions) $(LibCommonHeader)  $< -o $@
+
+
+$(Program) : $(Objs) $(LibObjs) ;
+	@echo " ==> $(Program)  "
+	@$(crossBinutils)gcc -static $(Objs) $(LibObjs) -o $(Program)
+	@$(crossBinutils)readelf -S -l -W $(Program) >$(Program).elf.txt
+	@$(crossBinutils)objdump -d $(Program) >$(Program).dump.txt
+
+program :
+	@make CC=$(crossBinutils)gcc $(Program) ExtraCompileOptions='-O3 -DShowDebugMsg -DUseDebugFile '
+
+cleanprogram :
+	rm -f $(Program).dump.txt $(Program).elf.txt $(Program) $(Objs) $(LibObjs)
+
+runprogram : program ;
+	$(FASTSIM) ./$(Program) <$(Program.iStream) >$(Program.oStream) 
+
+
+# simulate program on remote gem5 simulation server
+# program and execution command line text will be uploaded 
+# into gem5 guest os using the m5 readfile functionality
+simServerLogin =ekowhaywood@222.111.165.27
+simSererPass=ekowhaywood
+
+simprogram : program ;
+	sshpass -p $(simServerPass) scp -P 20022 $(Program) $(simServerLogin):spm_bench/app.bin
+			
+
+getStats : 
+	rm -f sim.stats.$(Program).txt
+	sshpass -p ekowhaywood scp -P 20022 ekowhaywood@222.111.165.27:spm_bench/m5out.normal.system/stats.txt sim.stats.$(Program).txt 
+
+
+
+#sshpass -p ekowhaywood scp -P 20022 data/small.pcm ekowhaywood@222.111.165.27:spm_bench/data/small.pcm
+
+#app.bin
+
+
+
+
+#-DShowDebugMsg
+
+
+
+
+
+
+
+
+
+#$(FASTSIM) ./$(Program)
+#$(crossFlags) -emit-llvm # ", Compile Options:\"$(CompileOptions)\" \n"
+#-include ../../util/substdlib.h
+
+#-DUsePhyNvmm -DWITH_ENC_DEC -DSHOW_BITFLIP -DSHOW_EXECUTION_REPORT -DWITH_ENC_DEC
+# -DSHOW_EXECUTION_REPORT
+#-DUsePhyNvmm -DWITH_ENC_DEC -DSHOW_BITFLIP -DSHOW_EXECUTION_REPORT -DWITH_ENC_DEC
+
+#ifeq ($(CC), "")
+#	CC = $(LLVM_PATH)clang
+#endif
+
+#-Wl,-T,$(default.ld)
+
+
+
+
+
+

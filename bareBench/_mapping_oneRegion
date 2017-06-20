@@ -1,0 +1,17 @@
+1
+
+
+Entry 0
+main 0
+_readInputStream 0
+_writeOutputStream 0
+_Exit 0
+_memcpy 0
+_memset 0
+simple_outputchar 0
+prints 0
+simple_outputi 0
+simple_vsprintf 0
+simple_fprintf 0
+simple_printf 0
+simple_sprintf 0

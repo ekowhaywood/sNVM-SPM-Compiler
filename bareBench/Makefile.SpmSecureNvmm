@@ -1,0 +1,174 @@
+
+
+LLVM_CXXFLAGS = -I/usr/local/include  -D_DEBUG -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS  -fomit-frame-pointer -std=c++11 -fvisibility-inlines-hidden -fno-exceptions -fno-rtti -fPIC -ffunction-sections -fdata-sections -Wcast-qual -O3
+
+Pass.Path = ../../llvm_Passes
+Util.Path = ../../util
+RTL.Path  = ../../runtime_library
+CompileOptions= $(ExtraCompileOptions)
+
+%.bc: %.c ;
+	@echo " ==> $@ "
+	@$(CC) -c $(crossFlags) -emit-llvm $(CompileOptions) $(LibIRHeaders) $(ExcludedHeaders) $< -o $@
+	@$(DIS) $@
+
+lib.%.bc : ../substdlibs/%.c ../substdlibs/%.h ;
+	@echo " ==> $@ "
+	@$(CC)  -c $(crossFlags) -emit-llvm $(CompileOptions) $(LibIRHeaders) $(ExcludedHeaders) $< -o $@
+	@$(DIS) $@
+
+# we take out reimplemented stdlibs fwriteErr fwriteO
+exclude=malloc mem 
+stdlibs__ = $(filter-out $(exclude),$(stdlibs))
+LibIRObjs:= lib._common.bc $(foreach OBJ, $(stdlibs__), lib.$(OBJ).bc)
+LibIRHeaders:= -include ../substdlibs/_common.h $(foreach hdr,$(stdlibs__), -include ../substdlibs/$(hdr).h )
+ExcludedHeaders:= $(foreach OBJ, $(filter $(stdlibs),$(exclude)), -include  $(RTL.Path)/lib.$(OBJ).h)
+
+
+Program.Opt = $(Program).opt.bc
+Program.IRObjs := $(foreach OBJ,$(Program.Obj),$(OBJ).bc)
+
+#ExcludedObjs:= $(foreach OBJ, $(filter $(stdlibs),$(exclude))  ,$(RTL.Path)/lib.$(OBJ).ll)
+ExcludedObjs:= $(foreach OBJ, $(filter $(stdlibs),$(exclude))  , lib.$(OBJ).bc)
+
+$(Program.Opt): $(Program.IRObjs) $(LibIRObjs) $(ExcludedObjs) ;
+	@echo " ==> $@ "
+	@$(LINK) $(Program.IRObjs) $(LibIRObjs) -o $(Program).raw.bc
+	@$(OPT) -O3 -strip-debug $(Program).raw.bc -o $(Program).raw2.bc 
+	@$(LINK) $(ExcludedObjs) $(Program).raw2.bc -o $@
+	@$(DIS) $@
+
+
+RuntimeLib.Obj = $(RTL.Path)/code.mgt.bc $(RTL.Path)/common.mgt.bc $(RTL.Path)/stack.mgt.bc $(RTL.Path)/heap.mgt.bc 
+RuntimeLib = $(RTL.Path)/RuntimeLibrary.bc
+
+$(RuntimeLib.Obj) : ;
+	@echo " ==> $@ "
+	@$(CC) -c $(crossFlags) -emit-llvm $(CompileOptions)  $(basename $@).c -o $@ -Werror
+
+$(ExcludedObjs) : ;
+	@echo " ==> $@ "
+	@$(CC)  -c $(crossFlags) -emit-llvm $(CompileOptions) $(RTL.Path)/$(basename $@).c -o $@
+	@$(DIS) $@
+	
+$(RuntimeLib) : $(RuntimeLib.Obj) ;
+	@echo " ==> $@  "
+	@$(LINK) $(RuntimeLib.Obj) -o $@
+	@$(DIS) $@
+
+
+Pass.Obj =  $(Pass.Path)/SecureNvmPass.o $(Pass.Path)/CodeMgt.o $(Pass.Path)/StackMgt.o $(Pass.Path)/HeapMgt.o
+Pass.Src = $(Pass.Path)/SecureNvmPass.hpp $(Pass.Path)/SecureNvmPass.cpp $(Pass.Path)/CodeMgt.cpp $(Pass.Path)/StackMgt.cpp $(Pass.Path)/HeapMgt.cpp
+Pass = $(Pass.Path)/sNVM.so
+
+.cpp.o:  $*.cpp, $*.hpp  ;
+	@echo "   ==> $@  "
+	@$(CXX) $(LLVM_CXXFLAGS) -c -g  $*.cpp -o $*.o
+
+$(Pass) : $(Pass.Src) $(Pass.Obj);
+	@echo "   ==> $@  "
+	@$(CXX) $(LLVM_LDFLAGS) -shared $(Pass.Obj) $(Pass.Path)/Graph.o -o $(Pass)
+
+compilerPass : $(Pass)
+
+cleancompilerPass :
+	rm -f $(Pass) $(Pass.Obj)
+
+
+
+SPM = $(Program).SPM
+
+$(SPM) : $(Pass) $(Program.Opt) $(RuntimeLib) ;
+	@echo "\n Make SPM Application  ==> $@ \n"
+	$(LINK) $(RuntimeLib) $(Program.Opt) -o $@.prepass.bc
+	$(OPT) -load $(Pass) -SecureNVMPass $@.prepass.bc -o $@.bc
+	$(DIS) $@.bc
+	$(LLC) $@.bc -o $@.o
+	$(crossBinutils)gcc -Wl,-T,sNVM.ld $@.o -o $@ -static -L../../runtime_library/enc_lib/ -lsodium -lm
+	$(crossBinutils)readelf -S -l -W $@ >$@.elf.txt
+	$(crossBinutils)objdump -d $@ >$@.dump.txt
+
+
+#spmFlags = -DAppName=\"$(Program)\" -DspmHeapSize=1024 -DBlockSize=128 -DAssoc=4  -DspmStackSize=32768 -DnvmmStackSize=262144 -DShowExecutionReport 
+
+spmFlags = -DAppName=\"$(Program)\" -DspmHeapSize=4096 -DVictimBuffSize=1024 -DBlockSize=256 -DAssoc=4 -DspmStackSize=32768 -DnvmmStackSize=262144 -DShowExecutionReport 
+
+#spmFlags = -DAppName=\"$(Program)\" #-DspmHeapSize=65536 -DBlockSize=512 -DUseReportFile -DAssoc=4  -DspmStackSize=32768 -DnvmmStackSize=262144 -DShowExecutionReport 
+
+
+#-DspmHeapSize=65536 -DUseReportFile
+#-DspmHeapSize=4096 -DBlockSize=512
+
+#-DShowBitFlips
+#-DShowSpmDebugMsg 
+#-DUseReportFile  -DUseDebugFile
+
+spm :
+	@make $(RuntimeLib)  ExtraCompileOptions=' $(spmFlags) '
+	@make $(Program.Opt) ExtraCompileOptions=' $(spmFlags) '
+	@make $(SPM)		ExtraCompileOptions=' $(spmFlags) '
+
+
+
+runspm :
+	$(FASTSIM) ./$(SPM) <$(Program.iStream) >$(Program.oStream) 
+
+cleanspm :
+	rm -f $(SPM) $(SPM).prepass.bc $(SPM).bc $(SPM).ll $(SPM).o sNVM.ld $(SPM).elf.txt $(SPM).dump.txt
+	rm -f $(RuntimeLib) $(RuntimeLib.Obj)
+	rm -f *.bc *.ll *.o 
+	
+
+
+
+
+# ----- END -DShowExecutionReport
+
+
+
+m :
+	make $(Program.Opt) ExtraCompileOptions=' $(spmFlags) '
+
+#make $(RuntimeLib) ExtraCompileOptions=' $(spmFlags) '
+
+#echo " $(stdlibs) ,  $(stdlibs_) , $(LibIRObjs)"
+
+#make $(RuntimeLib) ExtraCompileOptions=' $(spmFlags) '
+
+
+mm : $(LibIRObjs) ;
+
+c :
+	rm -f $(Program.Opt) $(Program).opt.ll $(Program.IRObjs) $(LibIRObjs)
+
+
+
+#make $(RuntimeLib) ExtraCompileOptions=' $(spmFlags) '
+#make $(Program.Opt)  ExtraCompileOptions=' $(spmFlags) '
+
+#$(RuntimeLib) $(RuntimeLib.Obj)
+
+
+
+up:
+	sshpass -p ekowhaywood scp -P 20022 $(sNVM) ekowhaywood@222.111.165.27:spm_bench/Uploadfile
+
+
+
+
+
+#-DShowDebugMsg -DShowBitFlips -DShowExecutionReport -DShowDebugMsg -DShowBitFlips
+#make runtimeLib ExtraCompileOptions='-DShowDebugMsg -DSHOW_EXECUTION_REPORT '
+
+#-DShowDebugMsg -DShowBitFlips -DShowExecutionReport -DShowDebugMsg -DShowBitFlips
+#make runtimeLib ExtraCompileOptions='-DShowDebugMsg -DSHOW_EXECUTION_REPORT '
+
+
+#include ../Makefile.common__
+
+#$(crossBinutils)gcc -c $(CompileOptions) $(LibCommonHeader)  $< -o $@
+#$(substdlib.h)
+
+
+
+
