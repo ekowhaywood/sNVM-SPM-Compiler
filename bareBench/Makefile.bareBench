@@ -56,8 +56,8 @@ runprogram : program ;
 # simulate program on remote gem5 simulation server
 # program and execution command line text will be uploaded 
 # into gem5 guest os using the m5 readfile functionality
-simServerLogin =ekowhaywood@222.111.165.27
-simSererPass=ekowhaywood
+simServerLogin =user@server 
+simSererPass=user
 
 simprogram : program ;
 	sshpass -p $(simServerPass) scp -P 20022 $(Program) $(simServerLogin):spm_bench/app.bin
@@ -65,11 +65,11 @@ simprogram : program ;
 
 getStats : 
 	rm -f sim.stats.$(Program).txt
-	sshpass -p ekowhaywood scp -P 20022 ekowhaywood@222.111.165.27:spm_bench/m5out.normal.system/stats.txt sim.stats.$(Program).txt 
+	sshpass -p user scp -P 20022 user@server:spm_bench/m5out.normal.system/stats.txt sim.stats.$(Program).txt 
 
 
 
-#sshpass -p ekowhaywood scp -P 20022 data/small.pcm ekowhaywood@222.111.165.27:spm_bench/data/small.pcm
+#sshpass -p user scp -P 20022 data/small.pcm user@server:spm_bench/data/small.pcm
 
 #app.bin
 

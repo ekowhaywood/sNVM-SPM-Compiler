@@ -119,56 +119,6 @@ cleanspm :
 	rm -f *.bc *.ll *.o 
 	
 
-
-
-
 # ----- END -DShowExecutionReport
 
-
-
-m :
-	make $(Program.Opt) ExtraCompileOptions=' $(spmFlags) '
-
-#make $(RuntimeLib) ExtraCompileOptions=' $(spmFlags) '
-
-#echo " $(stdlibs) ,  $(stdlibs_) , $(LibIRObjs)"
-
-#make $(RuntimeLib) ExtraCompileOptions=' $(spmFlags) '
-
-
-mm : $(LibIRObjs) ;
-
-c :
-	rm -f $(Program.Opt) $(Program).opt.ll $(Program.IRObjs) $(LibIRObjs)
-
-
-
-#make $(RuntimeLib) ExtraCompileOptions=' $(spmFlags) '
-#make $(Program.Opt)  ExtraCompileOptions=' $(spmFlags) '
-
-#$(RuntimeLib) $(RuntimeLib.Obj)
-
-
-
-up:
-	sshpass -p ekowhaywood scp -P 20022 $(sNVM) ekowhaywood@222.111.165.27:spm_bench/Uploadfile
-
-
-
-
-
-#-DShowDebugMsg -DShowBitFlips -DShowExecutionReport -DShowDebugMsg -DShowBitFlips
-#make runtimeLib ExtraCompileOptions='-DShowDebugMsg -DSHOW_EXECUTION_REPORT '
-
-#-DShowDebugMsg -DShowBitFlips -DShowExecutionReport -DShowDebugMsg -DShowBitFlips
-#make runtimeLib ExtraCompileOptions='-DShowDebugMsg -DSHOW_EXECUTION_REPORT '
-
-
-#include ../Makefile.common__
-
-#$(crossBinutils)gcc -c $(CompileOptions) $(LibCommonHeader)  $< -o $@
-#$(substdlib.h)
-
-
-
-
+ 
